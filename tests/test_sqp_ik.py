@@ -16,7 +16,7 @@ class Test_Iksolver_ik6D(OpenRAVEsetup):
         self.total_time = 0.0
         self.no_success = 0
         self.total_iter = 0
-        self.no_total = 10
+        self.no_total = 100
 
         # Construct random test case
         self.qseeds = []
@@ -76,7 +76,7 @@ class Test_Iksolver_ik3DRotation(OpenRAVEsetup):
         self.total_time = 0.0
         self.no_success = 0
         self.total_iter = 0
-        self.no_total = 10
+        self.no_total = 100
 
         # Construct random test case
         self.qseeds = []
@@ -162,7 +162,7 @@ class Test_Iksolver_ik3DTranslation(OpenRAVEsetup):
         self.total_time = 0.0
         self.no_success = 0.0
         self.total_iter = 0.0
-        self.no_total = 50
+        self.no_total = 100
 
         # Construct random test case
         self.qseeds = []
@@ -264,6 +264,78 @@ class Test_Iksolver_ik3DTranslation(OpenRAVEsetup):
                 pose_actual = self.manip.GetTransformPose()[4:]
 
                 testing.assert_allclose(pose_actual, pose_desired, rtol=1e-5, atol=1e-5)
+                self.assertTrue((q < self.q_max).all(), msg="Violate joint limits")
+                self.assertTrue((self.q_min < q).all(), msg="Violate joint limits")
+
+
+import random
+import time
+from iksolver.DiffIKSolver import DiffIKSolver
+rng = random.SystemRandom()
+class Test_Iksolver_Vanilla(OpenRAVEsetup):
+
+    def setUp(self):
+        super(Test_Iksolver_Vanilla, self).setUp()
+        self.q_min = self.robot.GetActiveDOFLimits()[0]
+        self.q_max = self.robot.GetActiveDOFLimits()[1]
+
+        self.total_time = 0.0
+        self.no_success = 0
+        self.total_iter = 0
+        self.no_total = 100
+
+        # Construct random test case
+        self.qseeds = []
+        self.poses = []
+        ndof = self.robot.GetActiveDOF()
+        for i in xrange(self.no_total):
+            qseed = []
+            for j in xrange(ndof):
+                qseed.append(rng.random()*(self.q_max[j] - self.q_min[j]) + self.q_min[j])
+            with self.robot:
+                self.robot.SetActiveDOFValues(qseed)
+                pose = self.manip.GetTransformPose()
+            if pose[0] < 0:
+                pose[:4] *= -1.
+            self.poses.append(pose)
+
+            # Perturb qseed from the desired position
+            for k in xrange(ndof):
+                qseed[j] += (rng.random()*2 - 1) * .2
+            self.qseeds.append(np.asarray(qseed))
+
+
+    def tearDown(self):
+        super(Test_Iksolver_Vanilla, self).tearDown()
+
+        # Report
+        print "Successful instances: {0}/{1}".format(self.no_success, self.no_total)
+        if self.no_success > 0:
+            print "Average time: {0} sec.".format(self.total_time/self.no_success)
+            print "Average iterations: {0}".format(1.0*self.total_iter/self.no_success)
+
+
+    def test_iksolver_vanilla_case_1(self):
+        
+        for (q, pose) in zip(self.qseeds, self.poses):
+            iksolver = DiffIKSolver(self.robot, self.manip.GetName())
+            ts = time.time()
+            result = iksolver.solve(pose, q, 1., conv_tol=1e-8)
+            te = time.time()
+
+            if result[0]:
+                self.total_time += te - ts
+                self.no_success += 1
+                self.total_iter += result[1]
+                
+                q = result[2]
+                with self.robot:
+                    self.robot.SetActiveDOFValues(q)
+                    pose_actual = self.manip.GetTransformPose()
+                if pose_actual[0] < 0:
+                    pose_actual[:4] *= -1.
+
+                testing.assert_allclose(pose_actual, pose, rtol=1e-5, atol=1e-5)
                 self.assertTrue((q < self.q_max).all(), msg="Violate joint limits")
                 self.assertTrue((self.q_min < q).all(), msg="Violate joint limits")
 
