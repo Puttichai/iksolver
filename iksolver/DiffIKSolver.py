@@ -125,9 +125,6 @@ class DiffIKSolver5D(object):
                     the solver has converged to the best solution it
                     can find
         """
-        # R = T[0:3, 0:3]
-        # p = T[0:3, 3]
-        # targetpose = np.hstack([orpy.quatFromRotationMatrix(R), p])
         if targetpose[0] < 0:
             targetpose[0:4] *= -1.
 
@@ -139,10 +136,7 @@ class DiffIKSolver5D(object):
             it += 1
             prev_obj = cur_obj
             cur_obj = self._eval_objective(targetpose, q)
-            # if abs(cur_obj - prev_obj) < conv_tol and cur_obj < conv_tol:
-            #     # local minimum reached
-            #     reached = True
-            #     break
+
             cos_alpha_desired = targetpose[0]
             sin_alpha_desired = np.sqrt(1 - cos_alpha_desired**2)
             if abs(sin_alpha_desired) > 1e-8:
@@ -237,15 +231,13 @@ class DiffIKSolver5D(object):
             J_quat *= -1.
 
         error_rot = self._eval_error_rotation(targetpose, currentpose)
-        try:
-            qd_rot = np.linalg.solve(J_quat[1:, :], error_rot)
-        except:
-            qd_rot = np.dot(np.linalg.pinv(J_quat[1:, :]), error_rot)
-
         error_pos = self._eval_error_position(targetpose, currentpose)
+        error = np.hstack([error_rot, error_pos])
+
+        J = np.vstack([J_quat[1:, :], J_trans])
         try:
-            qd_pos = np.linalg.solve(J_trans, error_pos)
+            qd = np.linalg.solve(J, error)
         except:
-            qd_pos = np.dot(np.linalg.pinv(J_trans), error_pos)
-            
-        return qd_rot + qd_pos
+            qd = np.dot(np.linalg.pinv(J), error)
+        return qd
+
