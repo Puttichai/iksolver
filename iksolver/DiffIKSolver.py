@@ -3,7 +3,7 @@ import openravepy as orpy
 
 
 class DiffIKSolver(object):
-
+    
     def __init__(self, robot, manipulatorname, qd_lim=1):
         self.robot = robot
         self.manip = robot.SetActiveManipulator(manipulatorname)
@@ -14,12 +14,14 @@ class DiffIKSolver(object):
         self.qd_max = +qd_lim*np.ones(n)
 
 
-    def solve(self, targetpose, q, dt, max_it=1000, conv_tol=1e-6):
+    def solve(self, targetpose, q, dt=1.0, max_it=1000, conv_tol=1e-8):
         """
         Compute joint values which bring the manipulator to T.
 
-        T -- desired manipulator transformation
-        q0 -- initial guess
+        targetpose -- desired manipulator transformation in the form of
+                      7D-vector [quaternion, translation]
+        q -- initial guess
+        dt -- diff ik solver step size
         max_it -- maximum number of differential IK iterations
         conv_tol -- if all elements of the actual pose is not farther 
                     from their corresponding elements in the target pose
