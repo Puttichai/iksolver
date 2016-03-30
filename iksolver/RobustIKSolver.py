@@ -34,7 +34,12 @@ class RobustIKSolver6D(object):
         self._ntrials = ntrials
 
 
+    def ActivateIKSolver(self):
+        self.manip.SetIkSolver(self.ikmodel6D.iksolver)
+
+
     def FindIKSolution(self, T):
+        self.ActivateIKSolver()
         # Use IKFast
         qsol = self.manip.FindIKSolution(T, ikfilter_checkcollision)
         if qsol is not None:
@@ -88,12 +93,17 @@ class RobustIKSolver5D(object):
         # parameters
         self._ntrials = ntrials
 
+        
+    def ActivateIKSolver(self):
+        self.manip.SetIkSolver(self.ikmodel5D.iksolver)
+
 
     def FindIKSolution(self, point, direction):
         """
         point -- a 3D vector
         direction -- a 3D 'unit' vector
         """
+        self.ActivateIKSolver()
         # Use IKFast
         ikparam = orpy.IkParameterization(orpy.Ray(point, direction), iktype5D)
         qsol = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
