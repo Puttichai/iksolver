@@ -13,6 +13,8 @@ class DiffIKSolver(object):
         self.qd_min = -qd_lim*np.ones(n)
         self.qd_max = +qd_lim*np.ones(n)
 
+        self._print = True
+
 
     def solve(self, targetpose, q, dt=1.0, max_it=1000, conv_tol=1e-8):
         """
@@ -36,12 +38,6 @@ class DiffIKSolver(object):
 
         while it < max_it:
             it += 1
-            # prev_obj = cur_obj
-            # cur_obj = self._eval_objective(targetpose, q)
-            # if abs(cur_obj - prev_obj) < conv_tol and cur_obj < conv_tol:
-            #     # local minimum reached
-            #     reached = True
-            #     break
             
             pose_actual = self._get_pose(q)
             if np.allclose(targetpose, pose_actual, atol=conv_tol, rtol=0):
@@ -54,7 +50,7 @@ class DiffIKSolver(object):
             q = q + (dt * qd)
             q = np.maximum(np.minimum(q, self.q_max), self.q_min)
 
-        if not reached:
+        if not reached and self._print:
             print '[solve] max iteration ({0}) exceeded'.format(it)
         return [reached, it, q]
 
