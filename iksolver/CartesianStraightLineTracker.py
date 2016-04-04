@@ -54,9 +54,11 @@ class CartesianStraightLineTracker(object):
         qprev = np.array(qinit)
         for i in xrange(nsteps):
             M[0:3, 3] += stepvector
-            targetpose = orpy.poseFromMatrix(M)
-            result = self._robustiksolver.diffiksolver.solve(targetpose, qprev)
-            if not result[0]:
+            # targetpose = orpy.poseFromMatrix(M)
+            # result = self._robustiksolver.diffiksolver.solve(targetpose, qprev)
+            sol = self._robustiksolver.FindIKSolution(M, qprev)
+            if sol is None:
+            # if not result[0]:
                 message = ' failed to track the path at step {0}'.format(i + 1)
                 print functionname + message
                 
@@ -66,8 +68,11 @@ class CartesianStraightLineTracker(object):
                 
                 return [False, []]
 
-            waypointslist.append(result[2])
-            qprev = np.array(result[2])
+            # waypointslist.append(result[2])
+            # qprev = np.array(result[2])
+            waypointslist.append(sol)
+            qprev = np.array(sol)
+                                
 
         return [True, waypointslist]
 
