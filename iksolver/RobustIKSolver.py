@@ -38,23 +38,31 @@ class RobustIKSolver6D(object):
         self.manip.SetIkSolver(self.ikmodel6D.iksolver)
 
 
-    def FindIKSolution(self, T):
+    def FindIKSolution(self, T, qref=None):
         self.ActivateIKSolver()
         # Use IKFast
-        qsol = self.manip.FindIKSolution(T, ikfilter_checkcollision)
+        with self.robot:
+            if qref is not None:
+                self.robot.SetActiveDOFValues(qref)
+            qsol = self.manip.FindIKSolution(T, ikfilter_checkcollision)
         if qsol is not None:
             return qsol
 
         for i in xrange(self._ntrials):
             Tnew = PerturbT(T)
-            q = self.manip.FindIKSolution(Tnew, ikfilter_checkcollision)
+            with self.robot:
+                if qref is not None:
+                    self.robot.SetActiveDOFValues(qref)
+                qinit = self.manip.FindIKSolution(Tnew, ikfilter_checkcollision)
+                if qinit is None:
+                    continue
             targetpose = orpy.poseFromMatrix(Tnew)
-            result = self.diffiksolver.solve(targetpose, q, dt=1.0, conv_tol=1e-8)
+            result = self.diffiksolver.solve(targetpose, qinit, dt=1.0, conv_tol=1e-8)
             
             if not result[0]:
                 continue
         
-            qsol = result[1]
+            qsol = result[-1]
             with self.robot:
                 self.robot.SetActiveDOFValues(qsol)
                 incollision = self.env.CheckCollision(self.robot) or\
@@ -136,7 +144,6 @@ class RobustIKSolver5D(object):
             ikparam = orpy.IkParameterization(ray, iktype5D)
             qinit = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
             if qinit is None:
-                # print 'iteration {0}: IKFast still failed'.format(i)
                 continue
         
             result = self.diffiksolver.solve(targetpose, qinit, dt=1.0, 
