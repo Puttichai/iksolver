@@ -31,13 +31,21 @@ class Test_DiffIksolver_Vanilla(OpenRAVEsetup):
         self.qseeds = []
         self.poses = []
         ndof = self.robot.GetActiveDOF()
-        for i in xrange(self.no_total):
+        i = 0
+        while i < self.no_total:
             qseed = []
             for j in xrange(ndof):
-                qseed.append(rng.random()*(self.q_max[j] - self.q_min[j]) + self.q_min[j])
+                qseed.append(rng.random()*(self.q_max[j] - self.q_min[j]) + 
+                             self.q_min[j])
             with self.robot:
                 self.robot.SetActiveDOFValues(qseed)
-                pose = self.manip.GetTransformPose()
+                incollision = (self.env.CheckCollision(self.robot) or
+                               self.robot.CheckSelfCollision())
+                if incollision:
+                    continue
+                else:
+                    pose = self.manip.GetTransformPose()
+                    i += 1
             if pose[0] < 0:
                 pose[:4] *= -1.
             self.poses.append(pose)

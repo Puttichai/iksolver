@@ -6,6 +6,7 @@ class DiffIKSolver(object):
     
     def __init__(self, robot, manipulatorname, qd_lim=1):
         self.robot = robot
+        self.env = self.robot.GetEnv()
         self.manip = robot.SetActiveManipulator(manipulatorname)
         n = self.robot.GetActiveDOF()
         self.q_min = self.robot.GetActiveDOFLimits()[0]
@@ -16,7 +17,8 @@ class DiffIKSolver(object):
         self._print = True
 
 
-    def solve(self, targetpose, q, dt=1.0, max_it=1000, conv_tol=1e-8):
+    def solve(self, targetpose, q, dt=1.0, max_it=1000, conv_tol=1e-8, 
+              checkcollision=True):
         """
         Compute joint values which bring the manipulator to T.
 
@@ -42,7 +44,20 @@ class DiffIKSolver(object):
             pose_actual = self._get_pose(q)
             if np.allclose(targetpose, pose_actual, atol=conv_tol, rtol=0):
                 # local minimum reached
-                reached = True
+                with self.robot:
+                    self.robot.SetActiveDOFValues(q)
+                    if not checkcollision:
+                        incollision = False
+                    else:
+                        incollision = (self.env.CheckCollision(self.robot) or 
+                                       self.robot.CheckSelfCollision())
+                    if not incollision:
+                        reached = True
+                    else:
+                        if self._print:
+                            print '[solve] desired transformation reached but' +\
+                            ' in-collision'
+                        return [reached, it, q]
                 break
 
             qd = self._compute_velocity(targetpose, q)
