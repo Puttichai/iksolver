@@ -55,7 +55,7 @@ class RobustIKSolver6D(object):
                 continue
         
             qsol = result[1]
-            with self.env:
+            with self.robot:
                 self.robot.SetActiveDOFValues(qsol)
                 incollision = self.env.CheckCollision(self.robot) or\
                 self.robot.CheckSelfCollision()
@@ -147,7 +147,7 @@ class RobustIKSolver5D(object):
                 continue
 
             qsol = result[-1]
-            with self.env:
+            with self.robot:
                 self.robot.SetActiveDOFValues(qsol)
                 incollision = self.env.CheckCollision(self.robot) or\
                 self.robot.CheckSelfCollision()
