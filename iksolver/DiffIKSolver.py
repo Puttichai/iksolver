@@ -50,13 +50,14 @@ class DiffIKSolver(object):
             pose_actual = self._get_pose(q)
             if np.allclose(targetpose, pose_actual, atol=conv_tol, rtol=0):
                 # local minimum reached
-                with self.robot:
-                    self.robot.SetActiveDOFValues(q)
-                    if not checkcollision:
-                        incollision = False
-                    else:
-                        incollision = (self.env.CheckCollision(self.robot) or 
+                if not checkcollision:
+                    incollision = False
+                else:
+                    with self.robot:
+                        self.robot.SetActiveDOFValues(q)
+                        incollision = (self.env.CheckCollision(self.robot) or
                                        self.robot.CheckSelfCollision())
+                        
                 if not incollision:
                     reached = True
                     # message = "Desired transformation reached"
