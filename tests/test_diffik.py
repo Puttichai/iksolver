@@ -33,28 +33,39 @@ class Test_DiffIksolver_Vanilla(OpenRAVEsetup):
         ndof = self.robot.GetActiveDOF()
         i = 0
         while i < self.no_total:
-            qseed = []
+            qsol = []
             for j in xrange(ndof):
-                qseed.append(rng.random()*(self.q_max[j] - self.q_min[j]) + 
-                             self.q_min[j])
+                qsol.append(rng.random()*(self.q_max[j] - self.q_min[j]) + 
+                            self.q_min[j])
             with self.robot:
-                self.robot.SetActiveDOFValues(qseed)
+                self.robot.SetActiveDOFValues(qsol)
                 incollision = (self.env.CheckCollision(self.robot) or
                                self.robot.CheckSelfCollision())
+                
                 if incollision:
                     continue
-                else:
-                    pose = self.manip.GetTransformPose()
-                    i += 1
+                
+                pose = self.manip.GetTransformPose()            
+                i += 1
+                
             if pose[0] < 0:
                 pose[:4] *= -1.
             self.poses.append(pose)
 
             # Perturb qseed from the desired position
-            for k in xrange(ndof):
-                qseed[k] += (rng.random()*2 - 1) * self.perturbation_mag
-            qseed = np.maximum(np.minimum(qseed, self.q_max), self.q_min)
-            self.qseeds.append(np.asarray(qseed))
+            incollision = True
+            while incollision:
+                qseed = np.array(qsol)
+                for k in xrange(ndof):
+                    qseed[k] += (rng.random()*2 - 1) * self.perturbation_mag
+                qseed = np.maximum(np.minimum(qseed, self.q_max), self.q_min)
+                
+                with self.robot:
+                    self.robot.SetActiveDOFValues(qseed)
+                    incollision = (self.env.CheckCollision(self.robot) or
+                                   self.robot.CheckSelfCollision())
+                
+            self.qseeds.append(qseed)
 
 
     def tearDown(self):
@@ -72,21 +83,20 @@ class Test_DiffIksolver_Vanilla(OpenRAVEsetup):
         Easy test. Differential IK Solver (vanilla version; IK6D)\n
         """
         i = 0
+        iksolver = DiffIKSolver(self.robot, self.manip.GetName())
         for (q, pose) in zip(self.qseeds, self.poses):
-            i += 1
-            iksolver = DiffIKSolver(self.robot, self.manip.GetName())
+            i += 1            
             ts = time.time()
-            result = iksolver.solve(pose, q, 1., conv_tol=1e-8)
+            [reached, it, qsol] = iksolver.solve(pose, q, dt=1., conv_tol=1e-8)
             te = time.time()
 
-            if result[0]:
+            if reached:
                 self.total_time += te - ts
                 self.no_success += 1
-                self.total_iter += result[1]
+                self.total_iter += it
                 
-                sol = result[2]
                 with self.robot:
-                    self.robot.SetActiveDOFValues(sol)
+                    self.robot.SetActiveDOFValues(qsol)
                     pose_actual = self.manip.GetTransformPose()
                 if pose_actual[0] < 0:
                     pose_actual[:4] *= -1.
@@ -96,6 +106,6 @@ class Test_DiffIksolver_Vanilla(OpenRAVEsetup):
                 # print 'actual pose', pose_actual
 
                 np.testing.assert_allclose(pose_actual, pose, rtol=1e-5, atol=1e-5)
-                self.assertTrue((sol <= self.q_max).all(), msg="Violate joint limits")
-                self.assertTrue((self.q_min <= sol).all(), msg="Violate joint limits")
+                self.assertTrue((qsol <= self.q_max).all(), msg="Violate joint limits")
+                self.assertTrue((self.q_min <= qsol).all(), msg="Violate joint limits")
 
