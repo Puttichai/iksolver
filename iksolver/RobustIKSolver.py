@@ -1,6 +1,7 @@
 import numpy as np
 import openravepy as orpy
 import random
+import logging
 from DiffIKSolver import DiffIKSolver
 
 ikfilter_checkcollision = orpy.IkFilterOptions.CheckEnvCollisions
@@ -12,7 +13,7 @@ rng = random.SystemRandom()
 
 class RobustIKSolver6D(object):
 
-    def __init__(self, robot, manipulatorname, ntrials=1000, qd_lim=1):
+    def __init__(self, robot, manipulatorname, ntrials=1000, qd_lim=1, loglevel=10):
         self.robot = robot
         self.manip = robot.SetActiveManipulator(manipulatorname)
         self.env = self.robot.GetEnv()
@@ -27,11 +28,18 @@ class RobustIKSolver6D(object):
         self.manip.SetIkSolver(self.ikmodel6D.iksolver)
 
         # Initialize a differential IK solver
-        self.diffiksolver = DiffIKSolver(robot, manipulatorname)
+        self.diffiksolver = DiffIKSolver(robot, manipulatorname, loglevel=40)
         self.diffiksolver._print = False
         
         # parameters
         self._ntrials = ntrials
+
+        # Python logging
+        self.logger = logging.getLogger(__name__)
+        self.loglevel = loglevel
+        FORMAT = "[%(module)s::%(funcName)s] %(message)s"
+        logging.basicConfig(format=FORMAT)
+        self.logger.setLevel(self.loglevel)
 
 
     def ActivateIKSolver(self):
@@ -46,41 +54,50 @@ class RobustIKSolver6D(object):
                 self.robot.SetActiveDOFValues(qref)
             qsol = self.manip.FindIKSolution(T, ikfilter_checkcollision)
         if qsol is not None:
+            # IKFast works. Return the IKFast solution directly.
             return qsol
 
+        # Here IKFast does not return anything. It is either that a
+        # solution exists but IKFast fails or no solution exists.
+        targetpose = orpy.poseFromMatrix(T)
         for i in xrange(self._ntrials):
+            # Perturb the desired T
             Tnew = PerturbT(T)
             with self.robot:
                 if qref is not None:
                     self.robot.SetActiveDOFValues(qref)
                 qinit = self.manip.FindIKSolution(Tnew, ikfilter_checkcollision)
-                if qinit is None:
-                    continue
-            targetpose = orpy.poseFromMatrix(Tnew)
-            result = self.diffiksolver.solve(targetpose, qinit, dt=1.0, conv_tol=1e-8)
+            if qinit is None:
+                continue            
             
-            if not result[0]:
+            # Since qinit is assumably close to a real solution (if
+            # one exists), we set max_it to be only 20.
+            [reached, _, qsol] = self.diffiksolver.solve\
+            (targetpose, qinit, dt=1.0, max_it=20, conv_tol=1e-8)
+            
+            if not reached:
                 continue
-        
-            qsol = result[-1]
+            
             with self.robot:
                 self.robot.SetActiveDOFValues(qsol)
                 incollision = self.env.CheckCollision(self.robot) or\
                 self.robot.CheckSelfCollision()
             if incollision:
                 continue
-            
+
+            # message = "Desired transformation reached"
+            # self.logger.info(message)
             return qsol
 
-        print '[RobustIKSolver::FindIKSolution] failed to find an IK solution after' +\
-        '{0} trials'.format(self._ntrials) 
+        message = "Failed to find an IK solution after {0} trials".format(self._ntrials)
+        self.logger.info(message)
         
         return None
 
 
 class RobustIKSolver5D(object):
 
-    def __init__(self, robot, manipulatorname, ntrials=1000, qd_lim=1):
+    def __init__(self, robot, manipulatorname, ntrials=1000, qd_lim=1, loglevel=10):
         self.robot = robot
         self.manip = robot.SetActiveManipulator(manipulatorname)
         self.env = self.robot.GetEnv()
@@ -95,11 +112,18 @@ class RobustIKSolver5D(object):
         self.manip.SetIkSolver(self.ikmodel5D.iksolver)
 
         # Initialize a differential IK solver
-        self.diffiksolver = DiffIKSolver(robot, manipulatorname)
+        self.diffiksolver = DiffIKSolver(robot, manipulatorname, loglevel=40)
         self.diffiksolver._print = False
 
         # parameters
         self._ntrials = ntrials
+
+        # Python logging
+        self.logger = logging.getLogger(__name__)
+        self.loglevel = loglevel
+        FORMAT = "[%(module)s::%(funcName)s] %(message)s"
+        logging.basicConfig(format=FORMAT)
+        self.logger.setLevel(self.loglevel)
 
         
     def ActivateIKSolver(self):
@@ -116,6 +140,7 @@ class RobustIKSolver5D(object):
         ikparam = orpy.IkParameterization(orpy.Ray(point, direction), iktype5D)
         qsol = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
         if qsol is not None:
+            # IKFast works. Return the IKFast solution directly.
             return qsol
 
         # Compute an initial rotation
@@ -146,14 +171,14 @@ class RobustIKSolver5D(object):
             if qinit is None:
                 continue
         
-            result = self.diffiksolver.solve(targetpose, qinit, dt=1.0, 
-                                             max_it=10.0, conv_tol=1e-8)
+            # Since qinit is assumably close to a real solution (if
+            # one exists), we set max_it to be only 20.
+            [reached, _, qsol] = self.diffiksolver.solve\
+            (targetpose, qinit, dt=1.0, max_it=20, conv_tol=1e-8)
 
-            if not result[0]:
-                # print 'iteration {0}: DiffIKSolver failed'.format(i)
+            if not reached:
                 continue
 
-            qsol = result[-1]
             with self.robot:
                 self.robot.SetActiveDOFValues(qsol)
                 incollision = self.env.CheckCollision(self.robot) or\
@@ -161,10 +186,12 @@ class RobustIKSolver5D(object):
             if incollision:
                 continue
             
+            # message = "Desired transformation reached"
+            # self.logger.info(message)
             return qsol
         
-        print '[RobustIKSolver5D::FindIKSolution] failed to find an IK solution after' +\
-        ' {0} trials'.format(self._ntrials)
+        message = "Failed to find an IK solution after {0} trials".format(self._ntrials)
+        self.logger.info(message)
 
         return None
 

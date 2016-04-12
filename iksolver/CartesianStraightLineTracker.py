@@ -1,15 +1,23 @@
 import numpy as np
 import openravepy as orpy
+import logging
 from RobustIKSolver import RobustIKSolver6D
 
 
 class CartesianStraightLineTracker(object):
   
-    def __init__(self, robot, manipulatorname):
+    def __init__(self, robot, manipulatorname, loglevel=10):
         self.robot = robot
         self.manip = self.robot.GetActiveManipulator()
         
         self._robustiksolver = RobustIKSolver6D(robot, manipulatorname)
+
+        # Python logging
+        self.logger = logging.getLogger(__name__)
+        self.loglevel = loglevel
+        FORMAT = "[%(module)s::%(funcName)s] %(message)s"
+        logging.basicConfig(format=FORMAT)
+        self.logger.setLevel(self.loglevel)
 
         self._printextrainfo = True
 
@@ -32,13 +40,11 @@ class CartesianStraightLineTracker(object):
 
         Return a list of status and waypointslist.
         """
-        functionname = '[CartesianStraightLineTracker]'
-
         if qinit is None:
             qinit = self._robustiksolver.FindIKSolution(Tinit)
             if qinit is None:
-                message = ' failed to find an initial IK solution'
-                print  functionname + message
+                message = "Failed to find an initial IK solution"
+                self.logger.info(message)
                 return [False, []]
 
         nsteps = int(length/trackersteplength)
@@ -55,11 +61,13 @@ class CartesianStraightLineTracker(object):
         for i in xrange(nsteps):
             M[0:3, 3] += stepvector
             targetpose = orpy.poseFromMatrix(M)
-            result = self._robustiksolver.diffiksolver.solve(targetpose, qprev,
-                                                             dt=1.0, conv_tol=1e-8)
-            if not result[0]:
-                message = ' failed to track the path at step {0}'.format(i + 1)
-                print functionname + message
+            
+            [reached, _, qsol] = self._robustiksolver.diffiksolver.solve\
+            (targetpose, qprev, dt=1.0, max_it=100, conv_tol=1e-8)
+            
+            if not reached:
+                message = 'Failed to track the path at step {0}'.format(i + 1)
+                self.logger.info(message)
                 
                 if self._printextrainfo:
                     print 'qprev = np.' + repr(qprev)
@@ -67,8 +75,8 @@ class CartesianStraightLineTracker(object):
                 
                 return [False, []]
 
-            waypointslist.append(result[2])
-            qprev = np.array(result[2])
+            waypointslist.append(qsol)
+            qprev = np.array(qsol)
 
         return [True, waypointslist]
 

@@ -1,10 +1,11 @@
 import numpy as np
 import openravepy as orpy
+import logging
 
 
 class DiffIKSolver(object):
     
-    def __init__(self, robot, manipulatorname, qd_lim=1):
+    def __init__(self, robot, manipulatorname, qd_lim=1, loglevel=10):
         self.robot = robot
         self.env = self.robot.GetEnv()
         self.manip = robot.SetActiveManipulator(manipulatorname)
@@ -14,7 +15,12 @@ class DiffIKSolver(object):
         self.qd_min = -qd_lim*np.ones(n)
         self.qd_max = +qd_lim*np.ones(n)
 
-        self._print = True
+        # Python logging
+        self.logger = logging.getLogger(__name__)
+        self.loglevel = loglevel
+        FORMAT = "[%(module)s::%(funcName)s] %(message)s"
+        logging.basicConfig(format=FORMAT)
+        self.logger.setLevel(self.loglevel)
 
 
     def solve(self, targetpose, q, dt=1.0, max_it=1000, conv_tol=1e-8, 
@@ -51,13 +57,13 @@ class DiffIKSolver(object):
                     else:
                         incollision = (self.env.CheckCollision(self.robot) or 
                                        self.robot.CheckSelfCollision())
-                    if not incollision:
-                        reached = True
-                    else:
-                        if self._print:
-                            print '[solve] desired transformation reached but' +\
-                            ' in-collision'
-                        return [reached, it, q]
+                if not incollision:
+                    reached = True
+                    # message = "Desired transformation reached"
+                    # self.logger.info(message)
+                else:
+                    message = "Desired transformation reached but in collision"
+                    self.logger.info(message)
                 break
 
             qd = self._compute_velocity(targetpose, q)
@@ -65,8 +71,9 @@ class DiffIKSolver(object):
             q = q + (dt * qd)
             q = np.maximum(np.minimum(q, self.q_max), self.q_min)
 
-        if not reached and self._print:
-            print '[solve] max iteration ({0}) exceeded'.format(it)
+        if not reached:
+            message = "Max iteration ({0}) reached".format(it)
+            self.logger.info(message)
         return [reached, it, q]
 
 
