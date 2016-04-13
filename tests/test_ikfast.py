@@ -23,7 +23,7 @@ class Test_IKFast_6D(OpenRAVEsetup):
         self.total_time = 0.0
         self.no_success = 0
         self.no_total = 100
-        self.purturbation_mag = 0.2
+        self.perturbation_mag = 0.2
 
         # Load IKFast
         self.ikmodel6D = orpy.databases.inversekinematics.InverseKinematicsModel\
@@ -33,31 +33,45 @@ class Test_IKFast_6D(OpenRAVEsetup):
             self.ikmodel6D.autogenerate()
         self.manip.SetIkSolver(self.ikmodel6D.iksolver)
         
-        # Construct random test case
+        # Construct random test cases
         self.qseeds = []
         self.poses = []
         ndof = self.robot.GetActiveDOF()
-        for i in xrange(self.no_total):
-            incollision = True
-            while incollision:
-                qseed = []
-                for j in xrange(ndof):
-                    qseed.append(rng.random()*(self.q_max[j] - self.q_min[j]) + self.q_min[j])
-                with self.robot:
-                    self.robot.SetActiveDOFValues(qseed)
-                    pose = self.manip.GetTransformPose()
-                    incollision = self.env.CheckCollision(self.robot) or\
-                    self.robot.CheckSelfCollision()
-                    
+        i = 0
+        while i < self.no_total:
+            qsol = []
+            for j in xrange(ndof):
+                qsol.append(rng.random()*(self.q_max[j] - self.q_min[j]) + 
+                            self.q_min[j])
+            with self.robot:
+                self.robot.SetActiveDOFValues(qsol)
+                incollision = (self.env.CheckCollision(self.robot) or
+                               self.robot.CheckSelfCollision())
+                
+                if incollision:
+                    continue
+                
+                pose = self.manip.GetTransformPose()            
+                i += 1
+                
             if pose[0] < 0:
                 pose[:4] *= -1.
             self.poses.append(pose)
 
             # Perturb qseed from the desired position
-            for k in xrange(ndof):
-                qseed[j] += (rng.random()*2 - 1) * self.purturbation_mag
-            qseed = np.maximum(np.minimum(qseed, self.q_max), self.q_min)
-            self.qseeds.append(np.asarray(qseed))
+            incollision = True
+            while incollision:
+                qseed = np.array(qsol)
+                for k in xrange(ndof):
+                    qseed[k] += (rng.random()*2 - 1) * self.perturbation_mag
+                qseed = np.maximum(np.minimum(qseed, self.q_max), self.q_min)
+                
+                with self.robot:
+                    self.robot.SetActiveDOFValues(qseed)
+                    incollision = (self.env.CheckCollision(self.robot) or
+                                   self.robot.CheckSelfCollision())
+                
+            self.qseeds.append(qseed)
 
 
     def tearDown(self):
@@ -74,11 +88,11 @@ class Test_IKFast_6D(OpenRAVEsetup):
         Easy test. IKFast 6D
         """
         i = 0
-        for (q, pose) in zip(self.qseeds, self.poses):
+        for (qseed, pose) in zip(self.qseeds, self.poses):
             i += 1
             T = orpy.matrixFromPose(pose)
             with self.robot:
-                self.robot.SetActiveDOFValues(q)
+                self.robot.SetActiveDOFValues(qseed)
                 ts = time.time()
                 sol = self.manip.FindIKSolution(T, ikfilter_checkcollision)
                 te = time.time()
@@ -94,27 +108,9 @@ class Test_IKFast_6D(OpenRAVEsetup):
                     pose_actual[:4] *= -1.
                     
                 np.testing.assert_allclose(pose_actual, pose, rtol=1e-5, atol=1e-5)
-                self.assertTrue((q <= self.q_max).all(), msg="Violate joint limits")
-                self.assertTrue((self.q_min <= q).all(), msg="Violate joint limits")
+                self.assertTrue((sol <= self.q_max).all(), msg="Violate joint limits")
+                self.assertTrue((self.q_min <= sol).all(), msg="Violate joint limits")
                 
-            else:
-                pose_string = self._string_from_vect(pose, 'pose')
-                q_string = self._string_from_vect(q, 'q')
-                print pose_string
-                print q_string
-                print ''                
-
-
-    def _string_from_vect(self, vect, name='vect'):
-        resstring = name + ' = np.array(['
-        separator = ''
-        for v in vect:
-            resstring += separator
-            resstring += '{0}'.format(v)
-            separator = ', '
-        resstring += '])'
-        return resstring
-
 
 class Test_IKFast_5D(OpenRAVEsetup):
 
@@ -126,7 +122,7 @@ class Test_IKFast_5D(OpenRAVEsetup):
         self.total_time = 0.0
         self.no_success = 0
         self.no_total = 100
-        self.purturbation_mag = 0.2
+        self.perturbation_mag = 0.2
 
         # Load IKFast
         self.ikmodel5D = orpy.databases.inversekinematics.InverseKinematicsModel\
@@ -136,30 +132,45 @@ class Test_IKFast_5D(OpenRAVEsetup):
             self.ikmodel5D.autogenerate()
         self.manip.SetIkSolver(self.ikmodel5D.iksolver)
         
-        # Construct random test case
+        # Construct random test cases
+        self.qsols = []
         self.qseeds = []
-        self.mats = []
+        self.transformations = []
         ndof = self.robot.GetActiveDOF()
-        for i in xrange(self.no_total):
-            incollision = True
-            while incollision:
-                qseed = []
-                for j in xrange(ndof):
-                    qseed.append(rng.random()*(self.q_max[j] - self.q_min[j]) + 
-                                 self.q_min[j])
-                with self.robot:
-                    self.robot.SetActiveDOFValues(qseed)
-                    T = self.manip.GetTransform()
-                    incollision = self.env.CheckCollision(self.robot) or\
-                    self.robot.CheckSelfCollision()
-                    
-            self.mats.append(T)
+        i = 0
+        while i < self.no_total:
+            qsol = []
+            for j in xrange(ndof):
+                qsol.append(rng.random()*(self.q_max[j] - self.q_min[j]) + 
+                            self.q_min[j])
+            with self.robot:
+                self.robot.SetActiveDOFValues(qsol)
+                incollision = (self.env.CheckCollision(self.robot) or
+                               self.robot.CheckSelfCollision())
+                
+                if incollision:
+                    continue
+                
+                T = self.manip.GetTransform()            
+                i += 1
+                
+            self.qsols.append(np.asarray(qsol))
+            self.transformations.append(T)
 
             # Perturb qseed from the desired position
-            for k in xrange(ndof):
-                qseed[j] += (rng.random()*2 - 1) * self.purturbation_mag
-            qseed = np.maximum(np.minimum(qseed, self.q_max), self.q_min)
-            self.qseeds.append(np.asarray(qseed))
+            incollision = True
+            while incollision:
+                qseed = np.array(qsol)
+                for k in xrange(ndof):
+                    qseed[k] += (rng.random()*2 - 1) * self.perturbation_mag
+                qseed = np.maximum(np.minimum(qseed, self.q_max), self.q_min)
+                
+                with self.robot:
+                    self.robot.SetActiveDOFValues(qseed)
+                    incollision = (self.env.CheckCollision(self.robot) or
+                                   self.robot.CheckSelfCollision())
+                
+            self.qseeds.append(qseed)
 
 
     def tearDown(self):
@@ -176,84 +187,39 @@ class Test_IKFast_5D(OpenRAVEsetup):
         Easy test. IKFast 5D
         """
         i = 0
-        for (q, T) in zip(self.qseeds, self.mats):
+        for (initsol, qseed, T) in zip(self.qsols, self.qseeds, self.transformations):
             i += 1
             point = T[0:3, 3]
             direction = T[0:3, 2] / np.linalg.norm(T[0:3, 2])
             ikparam = orpy.IkParameterization(orpy.Ray(point, direction), iktype5D)
             with self.robot:
-                self.robot.SetActiveDOFValues(q)
+                self.robot.SetActiveDOFValues(qseed)
                 ts = time.time()
-                sol = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
+                qsol = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
                 te = time.time()
-
-            if sol is not None:
+                
+            if qsol is not None:
                 self.total_time += te - ts
                 self.no_success += 1
                 
                 with self.robot:
-                    self.robot.SetActiveDOFValues(sol)
+                    self.robot.SetActiveDOFValues(qsol)
                     Tmanip = self.manip.GetTransform()
 
-                q_string = self._string_from_vector(q, 'q')
-                print q_string
-                Tmanip_string = self._string_from_matrix(Tmanip, 'Tmanip')
-                print Tmanip_string
-                    
                 # Check direction
-                direction_actual = Tmanip[0:3, 2]
+                direction_actual = Tmanip[0:3, 2] / np.linalg.norm(Tmanip[0:3, 2])
 
-                np.testing.assert_allclose(direction, direction_actual, 
-                                           rtol=1e-5, atol=1e-5)
+                try:
+                    np.testing.assert_allclose(direction, direction_actual, 
+                                               rtol=1e-5, atol=1e-5)
+                except:
+                    print 'initsol = np.' + repr(initsol)
+                    print 'qsol = np.' + repr(qsol)
 
                 # Check position
-                point_actual = T[0:3, 3]
-                np.testing.assert_allclose(point_actual[4:], point[4:], 
+                point_actual = Tmanip[0:3, 3]
+                np.testing.assert_allclose(point_actual, point, 
                                            rtol=1e-5, atol=1e-5)
                 
-                self.assertTrue((q <= self.q_max).all(), msg="Violate joint limits")
-                self.assertTrue((self.q_min <= q).all(), msg="Violate joint limits")
-
-            else:
-                q_string = self._string_from_vector(q, 'q')
-                print pose_string
-                print q_string
-                print ''
-
-
-    def _string_from_vector(self, vect, name='vect'):
-        resstring = name + ' = np.array(['
-        separator = ''
-        for v in vect:
-            resstring += separator
-            resstring += '{0}'.format(v)
-            separator = ', '
-        resstring += '])'
-        return resstring
-
-    def _string_from_matrix(self, mat, name='mat'):
-        resstring = name + ' = np.array(['
-        offset = len(resstring)
-
-        shape = mat.shape
-        
-        rows = []
-        for i in xrange(shape[0]):
-            row_string = '['
-            separator = ''
-            for j in xrange(shape[1]):
-                row_string += separator
-                row_string += '{0}'.format(mat[i, j])
-                separator = ', '
-            row_string += ']'
-            rows.append(row_string)
-
-        separator = ''
-        for string in rows:
-            resstring += separator
-            resstring += string
-            separator = ',\n' + ' '*offset
-
-        resstring += '])'
-        return resstring
-        
+                self.assertTrue((qsol <= self.q_max).all(), msg="Violate joint limits")
+                self.assertTrue((self.q_min <= qsol).all(), msg="Violate joint limits")

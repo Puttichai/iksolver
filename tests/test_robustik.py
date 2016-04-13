@@ -14,7 +14,7 @@ rng = random.SystemRandom()
 class Test_RobustIK5D(OpenRAVEsetup):
     
     def setUp(self):
-        robotfile = '/robots/denso_all_withbase.robot.xml'
+        robotfile = 'robots/denso_driller.robot.xml'
         manipulatorname = 'drill'
         super(Test_RobustIK5D, self).setUp(robotfile=robotfile, 
                                            manipulatorname=manipulatorname)

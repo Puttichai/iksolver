@@ -7,13 +7,12 @@ rospack = rospkg.RosPack()
 
 class OpenRAVEsetup(unittest.TestCase):
 
-    def setUp(self, robotfile='/robots/denso-vs060.zae', manipulatorname='Flange',
+    def setUp(self, robotfile='robots/denso_vs060.dae', manipulatorname='Flange',
               collisioncheckername='ode'):
         self.env = orpy.Environment()
 
         # Get the DensoVS60 model - fast loading time
-        robot_path = rospack.get_path('cribus_openrave') + robotfile
-        self.robot = self.env.ReadRobotURI(robot_path)
+        self.robot = self.env.ReadRobotURI(robotfile)
         self.env.Add(self.robot, True)
         collisionchecker = orpy.RaveCreateCollisionChecker(self.env, collisioncheckername)
         self.env.SetCollisionChecker(collisionchecker)
