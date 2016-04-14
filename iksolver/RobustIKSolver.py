@@ -28,8 +28,7 @@ class RobustIKSolver6D(object):
         self.manip.SetIkSolver(self.ikmodel6D.iksolver)
 
         # Initialize a differential IK solver
-        self.diffiksolver = DiffIKSolver(robot, manipulatorname, loglevel=40)
-        self.diffiksolver._print = False
+        self.diffiksolver = DiffIKSolver(self.manip, loglevel=40)
         
         # parameters
         self._ntrials = ntrials
@@ -112,8 +111,7 @@ class RobustIKSolver5D(object):
         self.manip.SetIkSolver(self.ikmodel5D.iksolver)
 
         # Initialize a differential IK solver
-        self.diffiksolver = DiffIKSolver(robot, manipulatorname, loglevel=40)
-        self.diffiksolver._print = False
+        self.diffiksolver = DiffIKSolver(self.manip, loglevel=40)
 
         # parameters
         self._ntrials = ntrials
