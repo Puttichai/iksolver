@@ -5,15 +5,16 @@ import logging
 
 class DiffIKSolver(object):
     
-    def __init__(self, robot, manipulatorname, qd_lim=1, loglevel=10):
-        self.robot = robot
+    def __init__(self, manipulator=None, qd_lim=1, loglevel=10):
+        assert(manipulator is not None)
+        self.manip = manipulator
+        self.robot = self.manip.GetRobot()
         self.env = self.robot.GetEnv()
-        self.manip = robot.SetActiveManipulator(manipulatorname)
-        n = self.robot.GetActiveDOF()
+        ndof = self.robot.GetActiveDOF()
         self.q_min = self.robot.GetActiveDOFLimits()[0]
         self.q_max = self.robot.GetActiveDOFLimits()[1]
-        self.qd_min = -qd_lim*np.ones(n)
-        self.qd_max = +qd_lim*np.ones(n)
+        self.qd_min = -qd_lim*np.ones(ndof)
+        self.qd_max = +qd_lim*np.ones(ndof)
 
         # Python logging
         self.logger = logging.getLogger(__name__)
