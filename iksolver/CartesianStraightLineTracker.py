@@ -78,5 +78,25 @@ class CartesianStraightLineTracker(object):
             waypointslist.append(qsol)
             qprev = np.array(qsol)
 
+        if not np.allclose(M[0:3, 3], Tinit[0:3, 3] + length*direction):
+            M[0:3, 3] = Tinit[0:3, 3] + length*direction
+            targetpose = orpy.poseFromMatrix(M)
+            
+            [reached, _, qsol] = self._robustiksolver.diffiksolver.solve\
+            (targetpose, qprev, dt=1.0, max_it=100, conv_tol=1e-8)
+            
+            if not reached:
+                message = 'Failed to track the path at the last step'
+                self.logger.info(message)
+                
+                if self._printextrainfo:
+                    print 'qprev = np.' + repr(qprev)
+                    print 'Ttarget = np.' + repr(M)                    
+                
+                return [False, []]
+
+            waypointslist.append(qsol)
+            qprev = np.array(qsol)
+
         return [True, waypointslist]
 
