@@ -83,7 +83,7 @@ class Test_DiffIksolver_Vanilla(OpenRAVEsetup):
         Easy test. Differential IK Solver (vanilla version; IK6D)\n
         """
         i = 0
-        iksolver = DiffIKSolver(self.robot, self.manip.GetName())
+        iksolver = DiffIKSolver(self.manip)
         for (q, pose) in zip(self.qseeds, self.poses):
             i += 1            
             ts = time.time()
