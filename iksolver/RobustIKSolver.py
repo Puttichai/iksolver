@@ -45,13 +45,16 @@ class RobustIKSolver6D(object):
         self.manip.SetIkSolver(self.ikmodel6D.iksolver)
 
 
-    def FindIKSolution(self, T, qref=None):
+    def FindIKSolution(self, T, qref=None, checkcollision=True):
         self.ActivateIKSolver()
         # Use IKFast
         with self.robot:
             if qref is not None:
                 self.robot.SetActiveDOFValues(qref)
-            qsol = self.manip.FindIKSolution(T, ikfilter_checkcollision)
+            if checkcollision:
+                qsol = self.manip.FindIKSolution(T, ikfilter_checkcollision)
+            else:
+                qsol = self.manip.FindIKSolution(T, ikfilter_ignorecollision)
         if qsol is not None:
             # IKFast works. Return the IKFast solution directly.
             return qsol
@@ -65,25 +68,21 @@ class RobustIKSolver6D(object):
             with self.robot:
                 if qref is not None:
                     self.robot.SetActiveDOFValues(qref)
-                qinit = self.manip.FindIKSolution(Tnew, ikfilter_checkcollision)
+                if checkcollision:
+                    qinit = self.manip.FindIKSolution(Tnew, ikfilter_checkcollision)
+                else:
+                    qinit = self.manip.FindIKSolution(Tnew, ikfilter_ignorecollision)
             if qinit is None:
                 continue            
             
             # Since qinit is assumably close to a real solution (if
             # one exists), we set max_it to be only 20.
             [reached, _, qsol] = self.diffiksolver.solve\
-            (targetpose, qinit, dt=1.0, max_it=20, conv_tol=1e-8)
+            (targetpose, qinit, dt=1.0, max_it=20, conv_tol=1e-8, checkcollision=checkcollision)
             
             if not reached:
                 continue
             
-            with self.robot:
-                self.robot.SetActiveDOFValues(qsol)
-                incollision = self.env.CheckCollision(self.robot) or\
-                self.robot.CheckSelfCollision()
-            if incollision:
-                continue
-
             # message = "Desired transformation reached"
             # self.logger.info(message)
             return qsol
@@ -128,7 +127,7 @@ class RobustIKSolver5D(object):
         self.manip.SetIkSolver(self.ikmodel5D.iksolver)
 
 
-    def FindIKSolution(self, point, direction):
+    def FindIKSolution(self, point, direction, checkcollision=True):
         """
         point -- a 3D vector
         direction -- a 3D 'unit' vector
@@ -136,7 +135,10 @@ class RobustIKSolver5D(object):
         self.ActivateIKSolver()
         # Use IKFast
         ikparam = orpy.IkParameterization(orpy.Ray(point, direction), iktype5D)
-        qsol = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
+        if checkcollision:
+            qsol = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
+        else:
+            qsol = self.manip.FindIKSolution(ikparam, ikfilter_ignorecollision)
         if qsol is not None:
             # IKFast works. Return the IKFast solution directly.
             return qsol
@@ -165,23 +167,19 @@ class RobustIKSolver5D(object):
             # Let IKFast provide an initial solution
             ray = orpy.Ray(Tnew[0:3, 3], Tnew[0:3, 2]/np.linalg.norm(Tnew[0:3, 2]))
             ikparam = orpy.IkParameterization(ray, iktype5D)
-            qinit = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
+            if checkcollision:
+                qinit = self.manip.FindIKSolution(ikparam, ikfilter_checkcollision)
+            else:
+                qinit = self.manip.FindIKSolution(ikparam, ikfilter_ignorecollision)
             if qinit is None:
                 continue
         
             # Since qinit is assumably close to a real solution (if
             # one exists), we set max_it to be only 20.
             [reached, _, qsol] = self.diffiksolver.solve\
-            (targetpose, qinit, dt=1.0, max_it=20, conv_tol=1e-8)
+            (targetpose, qinit, dt=1.0, max_it=20, conv_tol=1e-8, checkcollision=checkcollision)
 
             if not reached:
-                continue
-
-            with self.robot:
-                self.robot.SetActiveDOFValues(qsol)
-                incollision = self.env.CheckCollision(self.robot) or\
-                self.robot.CheckSelfCollision()
-            if incollision:
                 continue
             
             # message = "Desired transformation reached"
@@ -192,6 +190,71 @@ class RobustIKSolver5D(object):
         self.logger.info(message)
 
         return None
+
+
+    def FindIKSolutions(self, point, direction, checkcollision=True):
+        """
+        point -- a 3D vector
+        direction -- a 3D 'unit' vector
+        """
+        self.ActivateIKSolver()
+        # Use IKFast
+        ikparam = orpy.IkParameterization(orpy.Ray(point, direction), iktype5D)
+        if checkcollision:
+            sols = self.manip.FindIKSolutions(ikparam, ikfilter_checkcollision)
+        else:
+            sols = self.manip.FindIKSolutions(ikparam, ikfilter_ignorecollision)
+        if len(sols) > 0:
+            # IKFast works. Return the IKFast solution directly.
+            return sols
+
+        # Compute an initial rotation
+        z = np.array(direction).reshape((3, 1))
+        x = PerpendicularTo(z).reshape((3, 1))
+        y = np.cross(z.T, x.T).reshape((3, 1))
+        R = np.hstack([x, y, z])
+        
+        nattempts = 3
+        sols = []
+        
+        for i in xrange(nattempts):
+            # Sample a rotation
+            theta = (2.0*rng.random() - 1.0) * np.pi
+            cos = np.cos(theta)
+            sin = np.sin(theta)
+            Rtheta = np.array([[ cos, -sin,  0.0],
+                               [ sin,  cos,  0.0],
+                               [ 0.0,  0.0,  1.0]])
+            Rnew = np.dot(R, Rtheta)
+            T = CombineRotationTranslation(Rnew, point) # desired transformation
+            targetpose = orpy.poseFromMatrix(T)  # desired pose
+
+            # Add some perturbation
+            Tnew = PerturbT(T)
+
+            # Let IKFast provide an initial solution
+            ray = orpy.Ray(Tnew[0:3, 3], Tnew[0:3, 2]/np.linalg.norm(Tnew[0:3, 2]))
+            ikparam = orpy.IkParameterization(ray, iktype5D)
+            if checkcollision:
+                sols_init = self.manip.FindIKSolutions(ikparam, ikfilter_checkcollision)
+            else:
+                sols_init = self.manip.FindIKSolutions(ikparam, ikfilter_ignorecollision)
+            if len(sols_init) == 0:
+                continue
+        
+            for qinit in sols_init:
+                # Since qinit is assumably close to a real solution (if
+                # one exists), we set max_it to be only 20.
+                [reached, _, qsol] = self.diffiksolver.solve\
+                (targetpose, qinit, dt=1.0, max_it=20, conv_tol=1e-8, checkcollision=checkcollision)
+              
+                if reached:
+                    sols.append(qsol)
+            
+        if len(sols) == 0:       
+            message = "Failed to find an IK solution after {0} trials".format(self._ntrials)
+            self.logger.info(message)
+        return sols
 
 
 ################################################################################
