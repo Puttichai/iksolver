@@ -22,9 +22,9 @@ class RobustIKSolver6D(object):
         self.ikmodel6D = orpy.databases.inversekinematics.InverseKinematicsModel\
         (self.robot, iktype=iktype6D)
         if not self.ikmodel6D.load():
-            print 'Generating IK model 6D database for {0}. This may take a while...'.\
-            format(self.robot.GetName())
-            self.ikmodel6D.autogenerate()
+            msg = 'IK model 6D database for manipulator {0} not found.'
+            msg += ' Please generate it first.'
+            raise Exception(msg)
         self.manip.SetIkSolver(self.ikmodel6D.iksolver)
 
         # Initialize a differential IK solver
@@ -104,9 +104,9 @@ class RobustIKSolver5D(object):
         self.ikmodel5D = orpy.databases.inversekinematics.InverseKinematicsModel\
         (self.robot, iktype=iktype5D)
         if not self.ikmodel5D.load():
-            print 'Generating IK model 5D database for {0}. This may take a while...'.\
-            format(self.robot.GetName())
-            self.ikmodel5D.autogenerate()
+            msg = 'IK model 5D database for manipulator {0} not found.'
+            msg += ' Please generate it first.'
+            raise Exception(msg)
         self.manip.SetIkSolver(self.ikmodel5D.iksolver)
 
         # Initialize a differential IK solver
